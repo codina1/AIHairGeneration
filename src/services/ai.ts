@@ -1,7 +1,7 @@
 import * as tf from '@tensorflow/tfjs'
 
 // مسیر مدل نسبت به مسیر پایه پروژه
-const MODEL_URL = 'models/hair_generator/model.json'
+const MODEL_URL = '/AIHairGeneration/models/hair_generator/model.json'
 
 let model: tf.GraphModel | null = null
 
