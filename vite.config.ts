@@ -1,9 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  base: '/AIHairGeneration/',
   server: {
+    port: 3000,
     proxy: {
       '/api': {
         target: 'https://api.replicate.com',
@@ -11,8 +14,6 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ''),
         secure: false,
       }
-    },
-    port: 3000
-  },
-  base: '/AIHairGeneration/',
+    }
+  }
 }) 

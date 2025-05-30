@@ -1,12 +1,14 @@
 import * as tf from '@tensorflow/tfjs'
 
-const MODEL_URL = '/models/hair_generator/model.json'
+// مسیر مدل نسبت به مسیر پایه پروژه
+const MODEL_URL = 'models/hair_generator/model.json'
 
 let model: tf.GraphModel | null = null
 
 async function loadModel() {
   if (!model) {
     try {
+      console.log('Loading model from:', MODEL_URL)
       model = await tf.loadGraphModel(MODEL_URL)
       console.log('Model loaded successfully')
     } catch (error) {
