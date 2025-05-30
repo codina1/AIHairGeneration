@@ -1,12 +1,18 @@
 import * as tf from '@tensorflow/tfjs'
 
-const MODEL_URL = '/AIHairGeneration/model/model.json'
+const MODEL_URL = '/AIHairGeneration/models/hair_generator/model.json'
 
 let model: tf.GraphModel | null = null
 
 async function loadModel() {
   if (!model) {
-    model = await tf.loadGraphModel(MODEL_URL)
+    try {
+      model = await tf.loadGraphModel(MODEL_URL)
+      console.log('Model loaded successfully')
+    } catch (error) {
+      console.error('Error loading model:', error)
+      throw new Error('Failed to load model')
+    }
   }
   return model
 }
