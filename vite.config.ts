@@ -11,7 +11,8 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ''),
         secure: false,
       }
-    }
+    },
+    port: 3000
   },
   base: '/AIHairGeneration/',
 }) 

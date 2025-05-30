@@ -1,121 +1,82 @@
 import * as tf from '@tensorflow/tfjs'
-import { loadGraphModel } from '@tensorflow/tfjs-converter'
-import { REPLICATE_API_TOKEN } from '../config'
+
+const MODEL_URL = '/AIHairGeneration/model/model.json'
 
 let model: tf.GraphModel | null = null
 
 async function loadModel() {
   if (!model) {
-    try {
-      // لود کردن مدل از فایل محلی
-      model = await loadGraphModel('/models/hair_generator/model.json')
-      console.log('Model loaded successfully')
-    } catch (error) {
-      console.error('Error loading model:', error)
-      throw new Error('خطا در بارگذاری مدل')
-    }
+    model = await tf.loadGraphModel(MODEL_URL)
   }
   return model
 }
 
-// تعریف مدل‌های مو
-const HAIR_STYLES = [
-  {
-    name: 'موی کوتاه',
-    image: '/images/hair/short.png',
-    offsetY: 0.05,
-    scale: 0.9,
-    headWidth: 0.7,
-    headHeight: 0.4
-  },
-  {
-    name: 'موی بلند',
-    image: '/images/hair/long.png',
-    offsetY: 0.02,
-    scale: 1.1,
-    headWidth: 0.7,
-    headHeight: 0.4
-  },
-  {
-    name: 'موی موج‌دار',
-    image: '/images/hair/wavy.png',
-    offsetY: 0.03,
-    scale: 1.0,
-    headWidth: 0.7,
-    headHeight: 0.4
-  }
-]
-
-export async function processImage(imageUrl: string, hairStyleIndex: number = 0): Promise<string> {
+export async function processImage(imageUrl: string): Promise<string> {
   try {
-    // ایجاد تصویر اصلی
-    const mainImage = new Image()
-    mainImage.src = imageUrl
+    // Load and preprocess the image
+    const img = new window.Image()
+    img.src = imageUrl
     await new Promise((resolve) => {
-      mainImage.onload = resolve
+      img.onload = resolve
     })
 
-    // ایجاد تصویر مو
-    const hairStyle = HAIR_STYLES[hairStyleIndex]
-    const hairImage = new Image()
-    hairImage.src = hairStyle.image
-    await new Promise((resolve, reject) => {
-      hairImage.onload = resolve
-      hairImage.onerror = () => reject(new Error(`خطا در لود کردن تصویر مو: ${hairStyle.image}`))
-    })
+    // Convert image to tensor
+    const tensor = tf.browser.fromPixels(img)
+      .resizeBilinear([256, 256])
+      .expandDims(0)
+      .div(255.0)
 
-    // ایجاد canvas
+    // Load model if not loaded
+    const model = await loadModel()
+
+    // Run inference
+    const result = model.predict(tensor) as tf.Tensor;
+
+    // Handle output tensor shape
+    let tensor3d: tf.Tensor3D;
+    let squeezed: tf.Tensor | null = null;
+    if (result.rank === 4) {
+      squeezed = result.squeeze();
+      if (squeezed.rank === 3) {
+        tensor3d = squeezed as unknown as tf.Tensor3D;
+      } else {
+        tensor3d = squeezed.expandDims(-1) as unknown as tf.Tensor3D;
+      }
+    } else if (result.rank === 3) {
+      tensor3d = result as unknown as tf.Tensor3D;
+    } else if (result.rank === 2) {
+      tensor3d = result.expandDims(-1) as unknown as tf.Tensor3D;
+    } else {
+      throw new Error('Unexpected output tensor rank: ' + result.rank);
+    }
+    // @ts-ignore
+    const outputArray = await tf.browser.toPixels(tensor3d);
+    
+    // Create canvas and draw result
     const canvas = document.createElement('canvas')
-    canvas.width = mainImage.width
-    canvas.height = mainImage.height
+    canvas.width = 256
+    canvas.height = 256
     const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('خطا در ایجاد canvas')
+    if (!ctx) throw new Error('Could not get canvas context')
 
-    // کشیدن تصویر اصلی
-    ctx.drawImage(mainImage, 0, 0)
+    const imageData = new ImageData(outputArray, 256, 256)
+    ctx.putImageData(imageData, 0, 0)
 
-    // محاسبه موقعیت و اندازه مو
-    const headWidth = canvas.width * hairStyle.headWidth
-    const headHeight = canvas.height * hairStyle.headHeight
-    const headX = (canvas.width - headWidth) / 2
-    const headY = canvas.height * hairStyle.offsetY
-
-    // کشیدن مو
-    ctx.drawImage(
-      hairImage,
-      headX - (headWidth * (hairStyle.scale - 1)) / 2,
-      headY - (headHeight * (hairStyle.scale - 1)) / 2,
-      headWidth * hairStyle.scale,
-      headHeight * hairStyle.scale
-    )
-
-    // اضافه کردن سایه برای طبیعی‌تر شدن
-    const shadowGradient = ctx.createRadialGradient(
-      headX + headWidth / 2,
-      headY + headHeight / 2,
-      0,
-      headX + headWidth / 2,
-      headY + headHeight / 2,
-      headWidth * 1.5
-    )
-    shadowGradient.addColorStop(0, 'rgba(0, 0, 0, 0.2)')
-    shadowGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.1)')
-    shadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
-
-    ctx.fillStyle = shadowGradient
-    ctx.fillRect(headX - headWidth, headY - headHeight, headWidth * 3, headHeight * 3)
+    // Clean up tensors
+    tensor.dispose();
+    if (squeezed) squeezed.dispose();
+    if (tensor3d !== result && tensor3d !== squeezed) tensor3d.dispose();
+    result.dispose();
 
     return canvas.toDataURL('image/jpeg')
   } catch (error) {
     console.error('Error processing image:', error)
-    throw error
+    throw new Error('Failed to process image')
   }
 }
 
 export async function processImageWithTensorFlow(imageUrl: string): Promise<string> {
   try {
-    const model = await loadModel()
-    
     // تبدیل تصویر به تنسور
     const img = new Image()
     img.src = imageUrl
@@ -158,6 +119,7 @@ export async function processImageWithTensorFlow(imageUrl: string): Promise<stri
     })
 
     // تبدیل نتیجه به تصویر
+    // @ts-ignore
     const output = await tf.browser.toPixels(result.squeeze())
     
     // ایجاد canvas برای نمایش نتیجه
